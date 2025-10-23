@@ -14,7 +14,473 @@
     <div id="root"></div>
     
     <script type="text/babel">
-        // PASTE YOUR REACT CODE HERE IN THE NEXT STEP
+        import { useState, useEffect } from 'react';
+import { TrendingUp, Trash2, Edit2, Check, X } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
+
+export default function NetWorthTracker() {
+  const [accounts, setAccounts] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [saveStatus, setSaveStatus] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [balance, setBalance] = useState('');
+  const [assetClass, setAssetClass] = useState('Cash');
+  const [editingId, setEditingId] = useState(null);
+  const [editBalance, setEditBalance] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const accountsData = localStorage.getItem('networth-accounts');
+      const historyData = localStorage.getItem('networth-history');
+      
+      if (accountsData) {
+        setAccounts(JSON.parse(accountsData));
+      }
+      if (historyData) {
+        setHistory(JSON.parse(historyData));
+      }
+    } catch (error) {
+      console.log('No saved data found, starting fresh');
+    }
+    setIsLoading(false);
+  };
+
+  const saveData = async (newAccounts, newHistory) => {
+    try {
+      setSaveStatus('Saving...');
+      localStorage.setItem('networth-accounts', JSON.stringify(newAccounts));
+      localStorage.setItem('networth-history', JSON.stringify(newHistory));
+      setSaveStatus('Saved');
+      setTimeout(() => setSaveStatus(''), 2000);
+    } catch (error) {
+      console.error('Error saving data:', error);
+      setSaveStatus('Error');
+    }
+  };
+
+  const addAccount = () => {
+    if (accountName && balance) {
+      const newAccount = {
+        id: Date.now(),
+        name: accountName,
+        balance: parseFloat(balance),
+        assetClass: assetClass,
+        dateAdded: new Date().toLocaleDateString()
+      };
+      
+      const newAccounts = [...accounts, newAccount];
+      setAccounts(newAccounts);
+      
+      const newHistory = updateHistoryData(newAccounts);
+      saveData(newAccounts, newHistory);
+      
+      setAccountName('');
+      setBalance('');
+      setShowAddForm(false);
+    }
+  };
+
+  const deleteAccount = (id) => {
+    const newAccounts = accounts.filter(account => account.id !== id);
+    setAccounts(newAccounts);
+    const newHistory = updateHistoryData(newAccounts);
+    saveData(newAccounts, newHistory);
+  };
+
+  const startEdit = (account) => {
+    setEditingId(account.id);
+    setEditBalance(account.balance.toString());
+  };
+
+  const saveEdit = (id) => {
+    const newAccounts = accounts.map(account => 
+      account.id === id 
+        ? { ...account, balance: parseFloat(editBalance) }
+        : account
+    );
+    setAccounts(newAccounts);
+    const newHistory = updateHistoryData(newAccounts);
+    saveData(newAccounts, newHistory);
+    setEditingId(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditBalance('');
+  };
+
+  const updateHistoryData = (currentAccounts) => {
+    const total = currentAccounts.reduce((sum, account) => sum + account.balance, 0);
+    const newSnapshot = {
+      date: new Date().toLocaleDateString(),
+      timestamp: Date.now(),
+      netWorth: total
+    };
+    
+    const existingToday = history.find(h => h.date === newSnapshot.date);
+    let newHistory;
+    if (existingToday) {
+      newHistory = history.map(h => h.date === newSnapshot.date ? newSnapshot : h);
+    } else {
+      newHistory = [...history, newSnapshot];
+    }
+    setHistory(newHistory);
+    return newHistory;
+  };
+
+  const totalNetWorth = accounts.reduce((sum, account) => sum + account.balance, 0);
+
+  const chartData = accounts.reduce((acc, account) => {
+    const existing = acc.find(item => item.name === account.assetClass);
+    if (existing) {
+      existing.value += account.balance;
+    } else {
+      acc.push({ name: account.assetClass, value: account.balance });
+    }
+    return acc;
+  }, []);
+
+  const groupedAccounts = accounts.reduce((acc, account) => {
+    if (!acc[account.assetClass]) {
+      acc[account.assetClass] = [];
+    }
+    acc[account.assetClass].push(account);
+    return acc;
+  }, {});
+
+  // Sort accounts within each group by balance descending
+  Object.keys(groupedAccounts).forEach(assetClass => {
+    groupedAccounts[assetClass].sort((a, b) => b.balance - a.balance);
+  });
+
+  const assetClassTotals = Object.keys(groupedAccounts).map(assetClass => ({
+    assetClass,
+    total: groupedAccounts[assetClass].reduce((sum, acc) => sum + acc.balance, 0),
+    percentage: totalNetWorth > 0 ? (groupedAccounts[assetClass].reduce((sum, acc) => sum + acc.balance, 0) / totalNetWorth * 100) : 0
+  }));
+
+  const COLORS = {
+    'Cash': '#7C9885',
+    'Equities': '#5B7C99',
+    'Crypto': '#D4A574',
+    'Real Estate': '#9B8B7E',
+    'Fixed Income': '#8B7B8B',
+    'Other': '#A8A8A8'
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-stone-50 to-slate-50">
+      {isLoading ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <p className="text-gray-400 text-sm">Loading...</p>
+        </div>
+      ) : (
+        <div className="max-w-5xl mx-auto px-6 py-12">
+        
+          {/* Header */}
+          <div className="mb-10">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-medium text-gray-600 tracking-tight">You're Worth More</h1>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 3C10.5 3 9.5 4 9 5C8.5 4 7.5 3 6 3C4 3 2 4.5 2 7C2 9.5 4 11.5 12 19C20 11.5 22 9.5 22 7C22 4.5 20 3 18 3C16.5 3 15.5 4 15 5C14.5 4 13.5 3 12 3Z" fill="#9B8B7E" opacity="0.4"/>
+                </svg>
+              </div>
+              {saveStatus && (
+                <span className="text-xs text-gray-400">{saveStatus}</span>
+              )}
+            </div>
+            <p className="text-7xl font-semibold text-gray-900 tracking-tight">
+              ${totalNetWorth.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            </p>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-6 mb-8 border-b border-gray-200">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`pb-3 text-sm font-medium transition-all ${
+                activeTab === 'overview'
+                  ? 'text-gray-900 border-b-2 border-gray-800'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setActiveTab('growth')}
+              className={`pb-3 text-sm font-medium transition-all ${
+                activeTab === 'growth'
+                  ? 'text-gray-900 border-b-2 border-gray-800'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Growth
+            </button>
+          </div>
+
+          {/* Charts Row */}
+          {activeTab === 'overview' && accounts.length > 0 && (
+            <div className="mb-12">
+              
+              {/* Pie Chart */}
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/50 shadow-sm">
+                <h3 className="text-sm font-medium text-gray-600 mb-4">Allocation</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={chartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={70}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                      strokeWidth={3}
+                      stroke="#ffffff"
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[entry.name]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value) => `${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+                      contentStyle={{ 
+                        border: 'none', 
+                        borderRadius: '12px', 
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                        fontSize: '13px',
+                        backgroundColor: 'rgba(255,255,255,0.95)',
+                        backdropFilter: 'blur(8px)'
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                
+                {/* Legend */}
+                <div className="space-y-2 mt-4">
+                  {assetClassTotals.map(item => (
+                    <div key={item.assetClass} className="flex items-center justify-between text-sm py-1.5 px-2 rounded-lg hover:bg-white/40 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-2.5 h-2.5 rounded-full shadow-sm" 
+                          style={{ backgroundColor: COLORS[item.assetClass] }}
+                        />
+                        <span className="text-gray-700">{item.assetClass}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-gray-500">{item.percentage.toFixed(0)}%</span>
+                        <span className="text-gray-900 font-medium">
+                          ${item.total.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Growth Tab */}
+          {activeTab === 'growth' && (
+            <div className="mb-12">
+              {history.length > 0 ? (
+                <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/50 shadow-sm">
+                  <h3 className="text-sm font-medium text-gray-600 mb-4">Net Worth Over Time</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={history}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis 
+                        dataKey="date" 
+                        tick={{ fontSize: 11, fill: '#6b7280' }}
+                        axisLine={{ stroke: '#e5e7eb' }}
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 11, fill: '#6b7280' }}
+                        axisLine={{ stroke: '#e5e7eb' }}
+                      />
+                      <Tooltip 
+                        formatter={(value) => `${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+                        contentStyle={{ 
+                          border: 'none', 
+                          borderRadius: '12px', 
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                          fontSize: '13px',
+                          backgroundColor: 'rgba(255,255,255,0.95)',
+                          backdropFilter: 'blur(8px)'
+                        }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="netWorth" 
+                        stroke="#5B7C99" 
+                        strokeWidth={2.5}
+                        dot={{ fill: '#5B7C99', r: 4, strokeWidth: 2, stroke: '#fff' }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="text-center py-16 bg-white/40 backdrop-blur-sm rounded-2xl border border-gray-200/50">
+                  <p className="text-gray-500 text-sm mb-2">No growth data yet</p>
+                  <p className="text-gray-400 text-xs">Add accounts and track changes over time to see your growth</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Add Account Form */}
+          <div className="mb-12 pb-8 border-b border-gray-200/60">
+            {!showAddForm ? (
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                + Add account
+              </button>
+            ) : (
+              <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-5 border border-gray-200/50">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium text-gray-600">New Account</h3>
+                  <button
+                    onClick={() => setShowAddForm(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="grid md:grid-cols-4 gap-3">
+                  <input
+                    type="text"
+                    value={accountName}
+                    onChange={(e) => setAccountName(e.target.value)}
+                    placeholder="Account name"
+                    className="px-4 py-2.5 bg-white/80 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400/50 focus:border-transparent backdrop-blur-sm"
+                  />
+                  <input
+                    type="number"
+                    value={balance}
+                    onChange={(e) => setBalance(e.target.value)}
+                    placeholder="Balance"
+                    className="px-4 py-2.5 bg-white/80 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400/50 focus:border-transparent backdrop-blur-sm"
+                  />
+                  <select
+                    value={assetClass}
+                    onChange={(e) => setAssetClass(e.target.value)}
+                    className="px-4 py-2.5 bg-white/80 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400/50 focus:border-transparent backdrop-blur-sm"
+                  >
+                    <option>Cash</option>
+                    <option>Equities</option>
+                    <option>Crypto</option>
+                    <option>Real Estate</option>
+                    <option>Fixed Income</option>
+                    <option>Other</option>
+                  </select>
+                  <button
+                    onClick={addAccount}
+                    className="bg-gray-900 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 transition-all shadow-sm hover:shadow"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Accounts Grouped by Asset Class */}
+          <div className="space-y-6">
+            {Object.keys(groupedAccounts).map(assetClass => (
+              <div key={assetClass} className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/50 shadow-sm">
+                <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-gray-200/70">
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-1 h-4 rounded-full" 
+                      style={{ backgroundColor: COLORS[assetClass] }}
+                    />
+                    <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{assetClass}</h2>
+                  </div>
+                  <span className="text-sm font-medium text-gray-900">
+                    ${groupedAccounts[assetClass].reduce((sum, acc) => sum + acc.balance, 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </span>
+                </div>
+                
+                <div className="space-y-0 divide-y divide-gray-200/60">
+                  {groupedAccounts[assetClass].map((account) => (
+                    <div
+                      key={account.id}
+                      className="flex items-center justify-between py-3.5 px-3 hover:bg-white/50 rounded-lg transition-all group"
+                    >
+                      <div className="flex-1">
+                        <span className="text-gray-900 font-medium">{account.name}</span>
+                        {editingId === account.id ? (
+                          <div className="flex items-center gap-2 mt-2">
+                            <input
+                              type="number"
+                              value={editBalance}
+                              onChange={(e) => setEditBalance(e.target.value)}
+                              className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400/50 shadow-sm"
+                            />
+                            <button
+                              onClick={() => saveEdit(account.id)}
+                              className="text-gray-600 hover:text-gray-900 transition-colors"
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-600 mt-1 font-medium">
+                            ${account.balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {editingId !== account.id && (
+                          <button
+                            onClick={() => startEdit(account)}
+                            className="text-gray-400 hover:text-gray-700 transition-colors"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => deleteAccount(account.id)}
+                          className="text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {accounts.length === 0 && (
+            <div className="text-center py-16 bg-white/40 backdrop-blur-sm rounded-2xl border border-gray-200/50">
+              <p className="text-gray-500 text-sm">No accounts yet</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
     </script>
 </body>
 </html>
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<NetWorthTracker />);
