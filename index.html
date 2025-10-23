@@ -8,6 +8,7 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/recharts@2.5.0/dist/Recharts.js"></script>
 </head>
 <body>
@@ -15,7 +16,7 @@
     
 <script type="text/babel">
 const { useState, useEffect } = React;
-const { TrendingUp, Trash2, Edit2, Check, X } = lucideReact;
+const { TrendingUp, Trash2, Edit2, Check, X } = lucide;
 const { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid } = Recharts;
 
 export default function NetWorthTracker() {
